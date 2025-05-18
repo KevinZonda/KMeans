@@ -15,8 +15,9 @@ type Task[T Number, R constraints.Float] struct {
 	Distance Distance[T, R]
 
 	centroids []Vector[T]
-	distances [][]R
-	clusters  []Cluster[T]
+
+	clusters        []Cluster[T]
+	UseAccumForMean bool
 }
 
 func (t *Task[T, R]) Run() []Vector[T] {
@@ -35,7 +36,6 @@ func (t *Task[T, R]) Run() []Vector[T] {
 	}
 
 	t.centroids = t.kmeanspp_init()
-	t.distances = initMatrix[R](t.K, len(t.Data))
 	t.clusters = make([]Cluster[T], t.K)
 	lastCentroids := t.centroids
 	for {
@@ -97,17 +97,18 @@ func (t *Task[T, R]) clearClusters(centroids []Vector[T]) {
 }
 
 func (t *Task[T, R]) Assign() {
+	distances := initMatrix[R](t.K, len(t.Data))
 
 	for i, point := range t.Data {
 		for j, centroid := range t.centroids {
-			t.distances[j][i] = t.Distance(point, centroid)
+			distances[j][i] = t.Distance(point, centroid)
 		}
 	}
 	// transpose the matrix
-	t.distances = transpose(t.distances)
+	distances = transpose(distances)
 
 	for i, point := range t.Data {
-		minDistIndex := argmin(t.distances[i])
+		minDistIndex := argmin(distances[i])
 		t.clusters[minDistIndex].Points = append(
 			t.clusters[minDistIndex].Points,
 			point,
@@ -122,18 +123,32 @@ func (t *Task[T, R]) UpdateCentroids(clusters []Cluster[T]) []Vector[T] {
 			centroids[i] = cluster.Centroid
 			continue
 		}
-		mean := make(Vector[T], len(cluster.Points[0]))
-		for _, point := range cluster.Points {
+
+		centroids[i] = t.mean(cluster.Points)
+	}
+	return centroids
+}
+
+func (t *Task[T, R]) mean(points []Vector[T]) Vector[T] {
+	mean := make(Vector[T], len(points[0]))
+	length := T(len(points))
+	if t.UseAccumForMean {
+		for _, point := range points {
+			for j := range point {
+				mean[j] += (point[j] / length)
+			}
+		}
+	} else {
+		for _, point := range points {
 			for j := range point {
 				mean[j] += point[j]
 			}
 		}
 		for j := range mean {
-			mean[j] /= T(len(cluster.Points))
+			mean[j] /= length
 		}
-		centroids[i] = mean
 	}
-	return centroids
+	return mean
 }
 
 func argmin[T Number](slice []T) int {
