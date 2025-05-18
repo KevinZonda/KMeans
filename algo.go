@@ -118,10 +118,24 @@ func (t *Task[T, R]) Assign() {
 func (t *Task[T, R]) UpdateCentroids(clusters []Cluster[T]) []Vector[T] {
 	centroids := make([]Vector[T], len(clusters))
 	for i, cluster := range clusters {
-		centroids[i] = cluster.Centroid
+		if len(cluster.Points) == 0 {
+			centroids[i] = cluster.Centroid
+			continue
+		}
+		mean := make(Vector[T], len(cluster.Points[0]))
+		for _, point := range cluster.Points {
+			for j := range point {
+				mean[j] += point[j]
+			}
+		}
+		for j := range mean {
+			mean[j] /= T(len(cluster.Points))
+		}
+		centroids[i] = mean
 	}
 	return centroids
 }
+
 func argmin[T Number](slice []T) int {
 	min := slice[0]
 	minIndex := 0
